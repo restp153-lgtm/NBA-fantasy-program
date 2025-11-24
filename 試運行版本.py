@@ -53,7 +53,7 @@ df["pred_score"] = model.predict(X)
 
 def show_player(idx):
     row = df.loc[idx]
-    return f"{idx}. {row['player_name']} ({row['team_abbreviation']}) - score={row['fantasy_score']:.1f}"
+    return f"{idx}. {row['player_name']} ({row['team_abbreviation']}) - fantasy_score={row['fantasy_score']:.1f}"
 
 def ai_pick(available):
     """AI 選剩下球員中 pred_score 最高者"""
