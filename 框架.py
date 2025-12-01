@@ -1,5 +1,5 @@
 <<<<<<< HEAD
-from data_loader import load_player_data, filter_nba_players, standardize_column_names
+from data_loader import load_player_data, filter_nba_players
 from feature_engineering import compute_fantasy_score, create_ml_features
 from ml_models import train_draft_model
 from ai_agent import ai_pick_easy, ai_pick_medium, ai_pick_hard
@@ -10,7 +10,6 @@ def main():
     # ---- Step 1: Load Data ----
     df = load_player_data("NBA_PlayerStats_202425.csv")
     df = filter_nba_players(df)
-    df = standardize_column_names(df)
 
     # ---- Step 2: Feature Engineering ----
     scoring_rules = {"pts": 1, "reb": 1.2, "ast": 1.5, "stl": 3, "blk": 3, "tov": -1}
