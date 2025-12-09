@@ -16,28 +16,6 @@ def draft_phase(df, difficulty, draft_model):
   # 1. 準備選秀池：計算並添加 'pred_score'
   draftable_players = df.copy()
   draftable_players['is_drafted'] = False
-  
-  if difficulty == "easy":
-      # Easy AI 只看實際分數，所以 pred_score = fantasy_score
-      draftable_players['pred_score'] = draftable_players['fantasy_score']
-  elif draft_model is not None:
-      # Medium/Hard AI 使用模型預測，首先需要創建特徵矩陣
-      # 假設 df 已經包含了所有訓練所需的欄位 (從 feature_engineering.py 來的)
-      from feature_engineering import create_ml_features
-      X, _, _ = create_ml_features(draftable_players) # 獲取特徵矩陣
-      
-      # 預測並將結果存儲回 DataFrame
-      try:
-        draftable_players['pred_score'] = draft_model.predict(X)
-        # 確保 pred_score 不為負值
-        draftable_players['pred_score'] = draftable_players['pred_score'].clip(lower=0)
-      except Exception as e:
-        print(f"Error during model prediction: {e}. Falling back to fantasy_score.")
-        draftable_players['pred_score'] = draftable_players['fantasy_score']
-  else:
-      # 如果沒有模型 (例如難度設置錯誤)，也 fallback 到實際分數
-      draftable_players['pred_score'] = draftable_players['fantasy_score']
-
 
   # 確保 'Player'/'player_name' 欄位存在，以便輸出
   if 'player_name' in draftable_players.columns:
@@ -103,11 +81,36 @@ def draft_phase(df, difficulty, draft_model):
 
     if is_player_picking_now:
       print("Player's turn to pick...")
-      # 1. Display available players
-      available_players = draftable_players[draftable_players['is_drafted'] == False]
-      print("\nAvailable Players:")
-      # Display only relevant columns for player choice
-      print(available_players[['Player', 'team_abbreviation', 'pred_score']].sort_values(by='pred_score', ascending=False).head(20).to_string())
+      
+      # 1. Get available players (使用 .copy() 確保我們不會修改原始 df)
+      available_players = draftable_players[draftable_players['is_drafted'] == False].copy()
+
+      # *** 修正區塊：僅在顯示時調整欄位名稱 ***
+      
+      # 內部使用的欄位名稱
+      AI_SORT_COLUMN = 'pred_score'        # AI 模型預測的分數 (用於排序)
+      PLAYER_DISPLAY_COLUMN = 'fantasy_score' # 傳統分數 (顯示給玩家看)
+      
+      # 確保排序欄位存在，如果不存在，則使用 fantasy_score 排序 (以防萬一)
+      if AI_SORT_COLUMN not in available_players.columns:
+          AI_SORT_COLUMN = PLAYER_DISPLAY_COLUMN
+          
+      print("\nAvailable Players (Display Score is traditional Fantasy Score):")
+      
+      # 1. 根據 AI 的預測分數進行排序
+      sorted_players = available_players.sort_values(by=AI_SORT_COLUMN, ascending=False)
+      
+      # 2. 選擇用於顯示的欄位
+      # 檢查 'Player' 欄位是否存在 (已假設在框架.py中已重命名 'player_name' -> 'Player')
+      display_cols = ['Player', 'team_abbreviation', PLAYER_DISPLAY_COLUMN]
+      
+      # 篩選出實際存在的欄位
+      final_display_cols = [col for col in display_cols if col in sorted_players.columns]
+      
+      # 3. 輸出並重新命名分數欄位供顯示
+      print(sorted_players[final_display_cols]
+            .rename(columns={PLAYER_DISPLAY_COLUMN: 'Display_Score (FScore)'}) # 僅在輸出時顯示為 'Display_Score'
+            .head(20).to_string())
       print("...")
 
 
@@ -172,13 +175,28 @@ def draft_phase(df, difficulty, draft_model):
   print("\n--- Draft Phase Ends ---")
   return player_team, ai_team
 
-def simulate_match(player_team, ai_team, df):
+def simulate_match(player_team, ai_team, df, difficulty): # <--- 必須有 difficulty 參數
   """
-  模擬比賽，比較兩隊球員的 fantasy_score 總和。
+  模擬比賽，比較兩隊球員的總得分。
+  - Easy 難度使用傳統 fantasy_score。
+  - Medium/Hard 難度使用 pred_score (即模型預測的潛力分數)。
   """
+  
+  # 根據難度選擇使用的分數欄位
+  if difficulty.lower() == "easy":
+      score_column = "fantasy_score"
+  else: # medium 或 hard
+      score_column = "pred_score"
+      
+      # 確保分數欄位存在
+      if score_column not in df.columns:
+          # 這個錯誤應該已被框架.py中的保護措施解決
+          print(f"Error: '{score_column}' missing for {difficulty} difficulty. Falling back to 'fantasy_score'.")
+          score_column = "fantasy_score"
+
   # 使用 .loc[team_list] 確保取得正確的球員數據
-  player_score = df.loc[player_team, "fantasy_score"].sum()
-  ai_score = df.loc[ai_team, "fantasy_score"].sum()
+  player_score = df.loc[player_team, score_column].sum()
+  ai_score = df.loc[ai_team, score_column].sum()
   
   if player_score > ai_score:
     winner = "Player"
@@ -186,4 +204,5 @@ def simulate_match(player_team, ai_team, df):
     winner = "AI"
   else:
     winner = "Draw"
-  return {"player_score": player_score, "ai_score": ai_score, "winner": winner}
+    
+  return {"player_score": player_score, "ai_score": ai_score, "winner": winner, "score_type": score_column}
