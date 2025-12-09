@@ -3,6 +3,7 @@ import pandas as pd
 import random
 import io
 import os # 引入 os 模組用於路徑檢查 (可選，但有助於除錯)
+import numpy as np
 
 # 導入所有本地模組
 from data_loader import load_player_data, filter_nba_players, standardize_column_names
@@ -90,7 +91,7 @@ def process_data(filepath, selected_difficulty):
         try:
             draft_model = train_draft_model(X, y)
             pred_scores = draft_model.predict(X) 
-            df['pred_score'] = pred_scores.clip(lower=0)
+            df['pred_score'] = np.maximum(0, pred_scores)
         except Exception as e:
             st.warning(f"模型訓練或預測錯誤: {e}。 'pred_score' 將使用 'fantasy_score' 作為後備。")
     
